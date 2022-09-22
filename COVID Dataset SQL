@@ -1,0 +1,220 @@
+SELECT *
+FROM 
+    CovidDeaths
+ORDER BY 
+    location, date
+
+SELECT *
+FROM 
+    CovidVaccinations
+ORDER BY 
+    location, date
+
+SELECT 
+    location,date,total_cases, new_cases, total_deaths, population
+FROM 
+    CovidDeaths
+ORDER BY
+    location,date
+
+
+-- Total Case VS. Total Death
+SELECT 
+    location,date,total_cases, total_deaths, (total_deaths/total_cases)*100 AS DeathPercent
+FROM 
+    CovidDeaths
+ORDER BY
+    location,date
+    
+-- Total Case VS. Population
+SELECT 
+    location,date,population,total_cases, (total_cases/population)*100 AS InfectionPercent
+FROM 
+    CovidDeaths
+ORDER BYa
+    location,date
+    
+-- Max Infection Rate VS. Population
+SELECT 
+    location,population, MAX(total_cases) AS MaxInfectionCount, MAX((total_cases/population))*100 AS InfectionPercent
+FROM 
+    CovidDeaths
+GROUP BY
+    location,population
+ORDER BY
+    InfectionPercent DESC
+    
+-- Max Death Rate VS. Population
+SELECT 
+    location,population, MAX(total_deaths) AS DeathCount, MAX((total_deaths/population))*100 AS DeathPercent
+FROM 
+    CovidDeaths
+WHERE
+    continent IS NOT null
+GROUP BY
+    location,population
+ORDER BY
+    DeathCount DESC
+    
+-- Max Death Rate VS. Continent
+SELECT 
+    location, MAX(total_deaths) AS DeathCount, MAX((total_deaths/population))*100 AS DeathPercent
+FROM 
+    CovidDeaths
+WHERE
+    continent IS null
+GROUP BY
+    location
+ORDER BY
+    DeathCount DESC
+    
+
+-- Max Death Rate VS. Continent
+SELECT 
+    continent, MAX(total_deaths) AS DeathCount, MAX((total_deaths/population))*100 AS DeathPercent
+FROM 
+    CovidDeaths
+WHERE
+    continent IS not null
+GROUP BY
+    continent
+ORDER BY
+    DeathCount DESC
+    
+
+-- Display World Count
+SELECT 
+    date, SUM (new_cases) AS total_cases, SUM (new_deaths) AS total_deaths, (SUM (new_deaths)/(SUM (new_cases))) *100 AS DeathPercent
+FROM 
+    CovidDeaths
+WHERE
+    continent IS not null
+GROUP BY
+    date
+ORDER BY
+    date,total_cases
+    
+SELECT * 
+FROM
+    CovidDeaths 
+    JOIN
+        CovidVaccinations
+        ON 
+            CovidDeaths.location = CovidVaccinations.location
+        AND
+            CovidDeaths.date = CovidVaccinations.date
+    
+-- Total Population AND Vaccinations
+SELECT 
+    CovidDeaths.continent,CovidDeaths.location,CovidDeaths.date,CovidDeaths.population,CovidVaccinations.new_vaccinations
+FROM
+    CovidDeaths 
+    JOIN
+        CovidVaccinations
+        ON 
+            CovidDeaths.location = CovidVaccinations.location
+        AND
+            CovidDeaths.date = CovidVaccinations.date 
+WHERE
+    CovidDeaths.continent is not NULL
+ORDER BY
+    2,3
+    
+
+-- Total Population AND Vaccinations OVER Rolling SUM of Vaccinations
+SELECT 
+    CovidDeaths.continent,CovidDeaths.location,CovidDeaths.date,CovidDeaths.population,CovidVaccinations.new_vaccinations,
+    SUM(CovidVaccinations.new_vaccinations) OVER (Partition by CovidDeaths.location ORDER BY CovidDeaths.location,CovidDeaths.date) AS RollingSUM_Vaccinations,
+    --(RollingSUM_Vaccinations/CovidDeaths.population)*100 
+FROM
+    CovidDeaths 
+    JOIN
+        CovidVaccinations
+        ON 
+            CovidDeaths.location = CovidVaccinations.location
+        AND
+            CovidDeaths.date = CovidVaccinations.date 
+WHERE
+    CovidDeaths.continent is not NULL
+ORDER BY
+    2,3
+    
+
+
+-- CTE Method
+WITH pop_vs_vacc (Continent, Location, Date, Population , New_Vaccinations,RollingSUM_Vaccinations)
+AS
+(
+SELECT 
+    CovidDeaths.continent,CovidDeaths.location,CovidDeaths.date,CovidDeaths.population,CovidVaccinations.new_vaccinations,
+    SUM(CovidVaccinations.new_vaccinations) OVER (Partition by CovidDeaths.location ORDER BY CovidDeaths.location,CovidDeaths.date) AS RollingSUM_Vaccinations
+    --,(RollingSUM_Vaccinations/CovidDeaths.population)*100 
+FROM
+    CovidDeaths 
+    JOIN
+        CovidVaccinations
+        ON 
+            CovidDeaths.location = CovidVaccinations.location
+        AND
+            CovidDeaths.date = CovidVaccinations.date 
+WHERE
+    CovidDeaths.continent is not NULL
+
+)
+SELECT *,(RollingSUM_Vaccinations/population)*100 
+FROM pop_vs_vacc
+
+
+
+--- TEMPORARY TABLE
+DROP TABLE IF EXISTS PercentPopulationVaccinated
+CREATE TABLE PercentPopulationVaccinated
+(
+Continent TEXT,
+location TEXT ,
+date datetime,
+population integer,
+New_vacc integer,
+RollingPeopleVacc integer
+)
+
+INSERT INTO PercentPopulationVaccinated
+SELECT 
+    CovidDeaths.continent,CovidDeaths.location,CovidDeaths.date,CovidDeaths.population,CovidVaccinations.new_vaccinations,
+    SUM(CovidVaccinations.new_vaccinations) OVER (Partition by CovidDeaths.location ORDER BY CovidDeaths.location,CovidDeaths.date) AS RollingSUM_Vaccinations
+    --,(RollingSUM_Vaccinations/CovidDeaths.population)*100 
+FROM
+    CovidDeaths 
+    JOIN
+        CovidVaccinations
+        ON 
+            CovidDeaths.location = CovidVaccinations.location
+        AND
+            CovidDeaths.date = CovidVaccinations.date 
+WHERE
+    CovidDeaths.continent is not NULL
+    
+SELECT *,(RollingPeopleVacc/population)*100 
+FROM PercentPopulationVaccinated
+
+---  Visualization by Views
+CREATE VIEW PopulationVaccinated
+AS
+SELECT 
+    CovidDeaths.continent,CovidDeaths.location,CovidDeaths.date,CovidDeaths.population,CovidVaccinations.new_vaccinations,
+    SUM(CovidVaccinations.new_vaccinations) OVER (Partition by CovidDeaths.location ORDER BY CovidDeaths.location,CovidDeaths.date) AS RollingSUM_Vaccinations
+    --,(RollingSUM_Vaccinations/CovidDeaths.population)*100 
+FROM
+    CovidDeaths 
+    JOIN
+        CovidVaccinations
+        ON 
+            CovidDeaths.location = CovidVaccinations.location
+        AND
+            CovidDeaths.date = CovidVaccinations.date 
+WHERE
+    CovidDeaths.continent is not NULL
+
+
+SELECT *
+FROM PopulationVaccinated
